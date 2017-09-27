@@ -128,7 +128,7 @@ def build_derivatives(old_gray, new_gray, window_size):
     window_size = window_size // 2 + 1
 
     # Calculative partial derivatives wrt x, y & time
-    kernel = np.array([[-1, 0, 1]]) / 2.
+    kernel = np.array([[1, 0, -1]]) / 2.
     I_x = convolve2d(old_gray, kernel, 'same')
     I_y = convolve2d(old_gray, kernel.T, 'same')
 
