@@ -1,3 +1,6 @@
+# Video files
+*.mov
+
 # JetBrains
 .idea/
 
