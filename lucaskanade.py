@@ -4,17 +4,17 @@ from scipy.signal import convolve2d
 from scipy.signal import gaussian
 from scipy.interpolate import RectBivariateSpline
 
-BIN = True
+BIN = False
 NATIVE = False
 DEBUG = False
 
 def track_features(old_gray, new_gray, features):
-    num_pyramid = 1
+    num_pyramid = 4
 
     window_size = 13
     w = window_size // 2
     epsilon = 0.3
-    num_iterations = 10
+    num_iterations = 1
 
     pyramid = build_pyramid(old_gray, new_gray, num_pyramid, window_size)
     #guassian_weights = np.matmul(gaussian(window_size, 1)[:, None], gaussian(window_size, 1)[None, :])
