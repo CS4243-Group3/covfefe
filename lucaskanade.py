@@ -1,19 +1,19 @@
 import numpy as np
 import cv2
 from scipy.signal import convolve2d
-from scipy.signal import gaussian
 from scipy.interpolate import RectBivariateSpline
 
-BIN = True
+BIN = False
 NATIVE = False
+DEBUG = False
 
 def track_features(old_gray, new_gray, features):
-    num_pyramid = 1
+    num_pyramid = 4
 
     window_size = 13
     w = window_size // 2
     epsilon = 0.3
-    num_iterations = 10
+    num_iterations = 1
 
     pyramid = build_pyramid(old_gray, new_gray, num_pyramid, window_size)
     #guassian_weights = np.matmul(gaussian(window_size, 1)[:, None], gaussian(window_size, 1)[None, :])
@@ -23,7 +23,7 @@ def track_features(old_gray, new_gray, features):
     new_features = []
 
     for fid in features:
-        print('feature', fid)
+        if DEBUG: print('feature', fid)
         feature = fid.flatten()
 
         g = np.zeros(2)
@@ -69,7 +69,7 @@ def track_features(old_gray, new_gray, features):
 
             Z = np.array([[np.sum(i_xx * guassian_weights), np.sum(i_xy * guassian_weights)],
                           [np.sum(i_xy * guassian_weights), np.sum(i_yy * guassian_weights)]])
-            print('Z', Z)
+            if DEBUG: print('Z', Z)
 
             eta_norm = 10
             for _ in range(num_iterations):
@@ -91,24 +91,24 @@ def track_features(old_gray, new_gray, features):
                     i_ty = i_t * i_y
 
                     b = np.array([np.sum(i_tx * guassian_weights), np.sum(i_ty * guassian_weights)])
-                    print('b', b)
+                    if DEBUG: print('b', b)
                     eta = np.linalg.lstsq(Z, b)[0]
                     eta_norm = np.linalg.norm(eta)
-                    print('eta', eta_norm, eta, d + eta)
+                    if DEBUG: print('eta', eta_norm, eta, d + eta)
                     d += eta
                 except:
                     err = True
 
             g += d
-            print('d', d)
+            if DEBUG: print('d', d)
 
         if err:
             continue
-        print('g', g)
+        if DEBUG: print('g', g)
         good_old.append(idx)
         new_features.append(fid + g)
     new_features = np.array(new_features).astype(np.float32)
-    print(new_features)
+    if DEBUG: print(new_features)
     return (np.array(good_old), new_features)
 
 def build_pyramid(old_gray, new_gray, num_pyramid, window_size):
@@ -116,10 +116,8 @@ def build_pyramid(old_gray, new_gray, num_pyramid, window_size):
     pyramid = [(old_gray, new_gray, build_derivatives(old_gray, new_gray, window_size))]
     for i in range(1, num_pyramid):
         old, new, _ = pyramid[i-1]
-        old = cv2.GaussianBlur(old, (3, 3), 1.5)
-        old = cv2.resize(old, (old.shape[1] // 2, old.shape[0] // 2))
-        new = cv2.GaussianBlur(new, (3, 3), 1.5)
-        new = cv2.resize(new, (new.shape[1] // 2, new.shape[0] // 2))
+        old = cv2.resize(src=old, dsize=None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+        new = cv2.resize(src=new, dsize=None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
         pyramid.append((old, new, build_derivatives(old, new, window_size)))
     return pyramid
 
@@ -127,7 +125,7 @@ def build_derivatives(old_gray, new_gray, window_size):
     window_size = window_size // 2 + 1
 
     # Calculative partial derivatives wrt x, y & time
-    kernel = np.array([[-1, 0, 1]]) / 2.
+    kernel = np.array([[1, 0, -1]]) / 2.
     I_x = convolve2d(old_gray, kernel, 'same')
     I_y = convolve2d(old_gray, kernel.T, 'same')
 
@@ -163,7 +161,7 @@ def get_range_values(y_coords, x_coords, values, BIN):
             return values[y_range[0]:y_range[-1]+1, x_range[0]:x_range[-1]+1]
         return f
     else:
-        return RectBivariateSpline(y_coords, x_coords, values)
+        return RectBivariateSpline(y_coords, x_coords, values, kx=2, ky=2)
 
 if NATIVE:
     def track_features(old_gray, new_gray, features):
@@ -178,6 +176,6 @@ if NATIVE:
         # Select good points
         # good_new = p1[st==1]
         # good_old = features[st==1]
-        # print(p1)
+        # if DEBUG: print(p1)
 
         return (features, p1)

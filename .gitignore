@@ -1,7 +1,8 @@
 # Video & Image files
 *.mov
 *.png
-*.jpe?g
+*.jpg
+*.jpeg
 *.mp4
 
 # JetBrains
