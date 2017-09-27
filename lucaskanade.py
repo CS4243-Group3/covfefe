@@ -6,6 +6,7 @@ from scipy.interpolate import RectBivariateSpline
 
 BIN = True
 NATIVE = False
+DEBUG = False
 
 def track_features(old_gray, new_gray, features):
     num_pyramid = 1
@@ -23,7 +24,7 @@ def track_features(old_gray, new_gray, features):
     new_features = []
 
     for fid in features:
-        print('feature', fid)
+        if DEBUG: print('feature', fid)
         feature = fid.flatten()
 
         g = np.zeros(2)
@@ -69,7 +70,7 @@ def track_features(old_gray, new_gray, features):
 
             Z = np.array([[np.sum(i_xx * guassian_weights), np.sum(i_xy * guassian_weights)],
                           [np.sum(i_xy * guassian_weights), np.sum(i_yy * guassian_weights)]])
-            print('Z', Z)
+            if DEBUG: print('Z', Z)
 
             eta_norm = 10
             for _ in range(num_iterations):
@@ -91,24 +92,24 @@ def track_features(old_gray, new_gray, features):
                     i_ty = i_t * i_y
 
                     b = np.array([np.sum(i_tx * guassian_weights), np.sum(i_ty * guassian_weights)])
-                    print('b', b)
+                    if DEBUG: print('b', b)
                     eta = np.linalg.lstsq(Z, b)[0]
                     eta_norm = np.linalg.norm(eta)
-                    print('eta', eta_norm, eta, d + eta)
+                    if DEBUG: print('eta', eta_norm, eta, d + eta)
                     d += eta
                 except:
                     err = True
 
             g += d
-            print('d', d)
+            if DEBUG: print('d', d)
 
         if err:
             continue
-        print('g', g)
+        if DEBUG: print('g', g)
         good_old.append(idx)
         new_features.append(fid + g)
     new_features = np.array(new_features).astype(np.float32)
-    print(new_features)
+    if DEBUG: print(new_features)
     return (np.array(good_old), new_features)
 
 def build_pyramid(old_gray, new_gray, num_pyramid, window_size):
@@ -178,6 +179,6 @@ if NATIVE:
         # Select good points
         # good_new = p1[st==1]
         # good_old = features[st==1]
-        # print(p1)
+        # if DEBUG: print(p1)
 
         return (features, p1)
