@@ -1,5 +1,9 @@
-# Video files
+# Video & Image files
 *.mov
+*.png
+*.jpg
+*.jpeg
+*.mp4
 
 # JetBrains
 .idea/
