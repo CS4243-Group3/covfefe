@@ -5,33 +5,15 @@ from scipy.signal import gaussian
 from scipy.interpolate import RectBivariateSpline
 
 BIN = True
+NATIVE = False
 
 def track_features(old_gray, new_gray, features):
-    # Parameters for lucas kanade optical flow
-    lk_params = dict(winSize=(15, 15),
-                     maxLevel=0,
-                     criteria=(cv2.TERM_CRITERIA_COUNT, 1, 0.03))
-
-    # calculate optical flow
-    p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, new_gray, features, None, **lk_params)
-
-    # Select good points
-    # good_new = p1[st==1]
-    # good_old = features[st==1]
-    #print(p1)
-
-    return (features, p1)
-
-def track_features(old_gray, new_gray, features):
-    # old_gray = cv2.GaussianBlur(old_gray, (3, 3), 1).T
-    # new_gray = cv2.GaussianBlur(new_gray, (3, 3), 1).T
-
     num_pyramid = 1
 
     window_size = 13
     w = window_size // 2
     epsilon = 0.3
-    num_iterations = 1
+    num_iterations = 10
 
     pyramid = build_pyramid(old_gray, new_gray, num_pyramid, window_size)
     #guassian_weights = np.matmul(gaussian(window_size, 1)[:, None], gaussian(window_size, 1)[None, :])
@@ -182,3 +164,20 @@ def get_range_values(y_coords, x_coords, values, BIN):
         return f
     else:
         return RectBivariateSpline(y_coords, x_coords, values)
+
+if NATIVE:
+    def track_features(old_gray, new_gray, features):
+        # Parameters for lucas kanade optical flow
+        lk_params = dict(winSize=(15, 15),
+                         maxLevel=9,
+                         criteria=(cv2.TERM_CRITERIA_COUNT, 1, 0.03))
+
+        # calculate optical flow
+        p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, new_gray, features, None, **lk_params)
+
+        # Select good points
+        # good_new = p1[st==1]
+        # good_old = features[st==1]
+        # print(p1)
+
+        return (features, p1)
