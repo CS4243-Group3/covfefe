@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 from scipy.signal import convolve2d
-from scipy.signal import gaussian
 from scipy.interpolate import RectBivariateSpline
 
 BIN = False
@@ -117,10 +116,8 @@ def build_pyramid(old_gray, new_gray, num_pyramid, window_size):
     pyramid = [(old_gray, new_gray, build_derivatives(old_gray, new_gray, window_size))]
     for i in range(1, num_pyramid):
         old, new, _ = pyramid[i-1]
-        old = cv2.GaussianBlur(old, (3, 3), 1.5)
-        old = cv2.resize(old, (old.shape[1] // 2, old.shape[0] // 2))
-        new = cv2.GaussianBlur(new, (3, 3), 1.5)
-        new = cv2.resize(new, (new.shape[1] // 2, new.shape[0] // 2))
+        old = cv2.resize(src=old, dsize=None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+        new = cv2.resize(src=new, dsize=None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
         pyramid.append((old, new, build_derivatives(old, new, window_size)))
     return pyramid
 
