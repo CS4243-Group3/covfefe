@@ -164,7 +164,7 @@ def get_range_values(y_coords, x_coords, values, BIN):
             return values[y_range[0]:y_range[-1]+1, x_range[0]:x_range[-1]+1]
         return f
     else:
-        return RectBivariateSpline(y_coords, x_coords, values)
+        return RectBivariateSpline(y_coords, x_coords, values, kx=2, ky=2)
 
 if NATIVE:
     def track_features(old_gray, new_gray, features):
