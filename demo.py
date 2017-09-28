@@ -1,19 +1,23 @@
 import numpy as np
 import cv2
+import argparse
 from lucaskanade import track_features
 
-cap = cv2.VideoCapture('trump.mp4')
+parser = argparse.ArgumentParser(description='Demo Lucas-Kanade Tracking')
+parser.add_argument('video_path', help='path to a video file')
+args = vars(parser.parse_args())
+
+cap = cv2.VideoCapture(args['video_path'])
 
 # params for Shi-Tomassi corner detection
 feature_params = dict(maxCorners=100, qualityLevel=0.3, minDistance=7, blockSize=7)
-
 
 
 # Create some random colors
 color = np.random.randint(0,255,(100,3))
 
 # Take first frame and find corners in it
-ret, old_frame = cap.read()
+_, old_frame = cap.read()
 old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
 features = cv2.goodFeaturesToTrack(old_gray, mask=None, **feature_params)
 
@@ -21,7 +25,10 @@ features = cv2.goodFeaturesToTrack(old_gray, mask=None, **feature_params)
 mask = np.zeros_like(old_frame)
 
 while True:
-    _, frame = cap.read()
+    ret, frame = cap.read()
+    if not ret:
+        break
+
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # calculate optical flow
