@@ -1,12 +1,14 @@
 import numpy as np
 import cv2
 
-cap = cv2.VideoCapture('hakase_lv2.mov')
+cap = cv2.VideoCapture('bg1.mov')
 
 num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
 vid_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 vid_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+"""
 averages = np.zeros((vid_height, vid_width, 3))
 
 while True:
@@ -16,15 +18,19 @@ while True:
     averages += frame / num_frames
 
 cv2.imwrite('background.png', averages)
+"""
+
+_, averages = cap.read()
+averages = averages.astype(np.float32)
 
 cap.release()
 
 # Reopen
-cap = cv2.VideoCapture('hakase_lv2.mov')
+cap = cv2.VideoCapture('moving.mov')
 framerate = cap.get(cv2.CAP_PROP_FPS)
 
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('hakase_foreground.mp4', fourcc, framerate, (vid_width, vid_height))
+out = cv2.VideoWriter('moving_foreground.mp4', fourcc, framerate, (vid_width, vid_height))
 
 def compute_pixel_luma_mask(frame):
     frame_expandable = frame.astype(np.float32)
