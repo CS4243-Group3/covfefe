@@ -29,9 +29,16 @@ def track_features(old_gray, new_gray, features, num_pyramid=4, num_iterations=1
 
             if DEBUG: print('g', displacement)
 
+            new_feature = (feature + displacement).astype(np.float32)
+
+            # Drop point if not a corner
+            if not is_corner(new_feature, pyramid[0][2], window_size // 2):
+                continue
+
             old_features.append(feature)
-            new_features.append((feature + displacement).astype(np.float32))
-        except:
+            new_features.append(new_feature)
+        except Exception as e:
+            print(str(e))
             continue
 
     return np.array(old_features), np.array(new_features)
@@ -175,6 +182,38 @@ def get_range_values(y_coords, x_coords, values, BIN):
         return f
     else:
         return RectBivariateSpline(y_coords, x_coords, values, kx=2, ky=2)
+
+# References
+# https://docs.opencv.org/trunk/d4/d7d/tutorial_harris_detector.html
+# http://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_feature2d/py_features_harris/py_features_harris.html
+# https://github.com/codeplaysoftware/visioncpp/wiki/Example:-Harris-Corner-Detection
+# Why not Tomassi? for performance
+def is_corner(coordinates, f_map, radius):
+    threshold = 4.
+    k = 0.04
+
+    f_I_xx = f_map['f_I_xx']
+    f_I_xy = f_map['f_I_xy']
+    f_I_yy = f_map['f_I_yy']
+
+    left = coordinates[0] - radius
+    right = coordinates[0] + radius
+    top = coordinates[1] - radius
+    bottom = coordinates[1] + radius
+    y_range = np.arange(top, bottom + 1, 1)
+    x_range = np.arange(left, right + 1, 1)
+
+    window_I_xy = f_I_xy(y_range, x_range, grid=True)
+    window_I_xx = f_I_xx(y_range, x_range, grid=True)
+    window_I_yy = f_I_yy(y_range, x_range, grid=True)
+
+    M = np.array([[np.sum(window_I_xx), np.sum(window_I_xy)],
+                  [np.sum(window_I_xy), np.sum(window_I_yy)]])
+
+    R = np.linalg.det(M) - k*np.square(np.trace(M))
+    if R <= threshold:
+        print(R)
+    return R > threshold
 
 
 if NATIVE:
