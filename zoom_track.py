@@ -28,11 +28,19 @@ mask = np.zeros_like(old_frame)
 
 
 #
-def bb(center):
-    w = 480
-    h = 360
-    return list(map(int, [center[0] - w / 2,  center[0] + w / 2, center[1] - h / 2, center[1] + h / 2]))
+def bb(center, i):
+    w = 1440 - min(i, 40) * (1440 - 480) / 40
+    unit = w // 4
+    w = unit * 4
+    h = unit * 3
+    x_min = max(0, center[0] - w / 2)
+    x_max = center[0] + w - (center[0] - x_min)
+    y_min = max(0, center[1] - h / 2)
+    y_max = center[1] + h - (center[1] - y_min)
 
+    return list(map(int, [x_min, x_max, y_min, y_max]))
+
+i = 0
 while True:
     ret, frame = cap.read()
     # print(frame.shape)
@@ -53,7 +61,7 @@ while True:
     # img = cv2.add(frame, mask)
     # print(good_new)
 
-    minX, maxX, minY, maxY = bb(good_new[0])
+    minX, maxX, minY, maxY = bb(good_new[0], i)
 
     img = np.zeros((maxY - minY, maxX - minX, 3))
     img = frame[minY:maxY+1, minX:maxX+1]
@@ -68,6 +76,7 @@ while True:
     # Now update the previous frame and previous points
     old_gray = frame_gray.copy()
     features = good_new.reshape(-1, 1, 2)
+    i += 1
 
 cv2.destroyAllWindows()
 cap.release()
