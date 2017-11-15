@@ -1,5 +1,6 @@
 # Video & Image files
 *.mov
+*.MTS
 *.png
 *.jpg
 *.jpeg

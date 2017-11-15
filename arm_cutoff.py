@@ -3,17 +3,19 @@ import numpy as np
 import math
 from scipy.signal import convolve2d
 from scipy.ndimage.filters import gaussian_filter
+from matplotlib.path import Path
 
-cup = cv2.VideoCapture('dance.mp4')
-bg2 = cv2.VideoCapture('dance_bg2.mp4')
+cup = cv2.VideoCapture('plus_ultra.mts')
+bg2 = cv2.VideoCapture('plus_ultra_bg2.mts')
 
 framerate = cup.get(cv2.CAP_PROP_FPS)
 vid_width = int(cup.get(cv2.CAP_PROP_FRAME_WIDTH))
 vid_height = int(cup.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('zoom_output.mp4', fourcc, framerate, (vid_width, vid_height))
+out = cv2.VideoWriter('plus_ultra_output.mp4', fourcc, framerate, (vid_width, vid_height))
 
-bg = cv2.VideoCapture('dance_bg.mp4')
+"""
+bg = cv2.VideoCapture('notebook_bg.mp4')
 ret_bg, frame_bg = bg.read()
 
 while True:
@@ -23,7 +25,22 @@ while True:
         break
 frame_bg = old_frame
 
+bg.release()
+"""
+
+frame_count = cup.get(cv2.CAP_PROP_FRAME_COUNT)
+bg_frame = frame_count - 3 * framerate
+
+cup.set(cv2.CAP_PROP_POS_FRAMES, int(bg_frame))
+
+ret_cup, frame_bg = cup.read()
+cup.release()
+
+cup = cv2.VideoCapture('plus_ultra.mts')
+cup.set(cv2.CAP_PROP_POS_FRAMES, 550)
+
 ret_bg2, frame_bg2 = bg2.read()
+cv2.imwrite('plus_ultra_bg2.png', frame_bg2)
 
 
 def l2_diff(fc, bg):
@@ -53,7 +70,7 @@ def gen_ellipse_curve(ellipse_x, ellipse_y_radius):
 
 def cutoff_contour(moving_part_bounding_box, arm_cutoff_left_bounding_box, arm_cutoff_right_bounding_box, bottom, top, center_y):
     # moving_part_bounding_box[center_y:(bottom - top), :] = False
-    ellipse_curve = gen_ellipse_curve(arm_cutoff_right_bounding_box - arm_cutoff_left_bounding_box, 3)
+    ellipse_curve = gen_ellipse_curve(arm_cutoff_right_bounding_box - arm_cutoff_left_bounding_box, 15)
     for x in range(moving_part_bounding_box.shape[1]):
         if x < arm_cutoff_left_bounding_box or x >= arm_cutoff_right_bounding_box:
             moving_part_bounding_box[center_y:(bottom - top), x] = False
@@ -69,10 +86,9 @@ def cut_moving_part_off_bounding_box(moving_part_mask, bounding_box_top_left, bo
     bottom = bounding_box_bottom_right[1]
 
     center_y = int((bottom - top) / 2)
-    mid_x = int((right - left) / 2)
 
     # Clean the parts below
-    moving_part_mask[bottom:, left - mid_x:right + mid_x] = False
+    moving_part_mask[top + center_y + 15:, 0:right] = False
 
     # Moving part in bounding box?
     moving_part_bounding_box = moving_part_mask[top:bottom, left:right]
@@ -122,20 +138,68 @@ def blur_moving_part_bounding_box_interface(blur_box, frame):
         blurred_box = blurred_box[2:-2, 2:-2]
         frame[top:bottom, left:right, channel] = blurred_box
 
+    shadow_line_blur = frame[887-2:929+2, 746-2:825+2]
+    kernel = gausswin([5, 5], 1.5)
+    for channel in range(3):
+        blurred_box = convolve2d(shadow_line_blur[:, :, channel], kernel, 'same').astype(np.uint8)
+        blurred_box = blurred_box[2:-2, 2:-2]
+        frame[887:929, 746:825, channel] = blurred_box
+
+
+def create_grace_triangle(triangle_points):
+    verts = triangle_points + [(0, 0)]
+    codes = [Path.MOVETO, Path.LINETO, Path.LINETO, Path.CLOSEPOLY]
+    path = Path(verts, codes)
+
+    x, y = np.meshgrid(np.arange(vid_width), np.arange(vid_height))
+    x, y = x.flatten(), y.flatten()
+
+    points = np.vstack((x,y)).T
+
+    grid = path.contains_points(points)
+    grid = grid.reshape((vid_height, vid_width))
+
+    return grid
+
+
+def create_grace_shape(shape_points):
+    verts = shape_points + [(0, 0)]
+    codes = [Path.MOVETO, Path.LINETO, Path.CURVE3, Path.CURVE3, Path.CLOSEPOLY]
+    path = Path(verts, codes)
+
+    x, y = np.meshgrid(np.arange(vid_width), np.arange(vid_height))
+    x, y = x.flatten(), y.flatten()
+
+    points = np.vstack((x, y)).T
+
+    grid = path.contains_points(points)
+    grid = grid.reshape((vid_height, vid_width))
+
+    return grid
+
+
+# grace_triangle = create_grace_triangle([(820, 843), (727, 922), (820, 937)])
+# grace_triangle = create_grace_triangle([(820, 843), (769, 887), (819, 898)])
+grace_triangle = create_grace_shape([(820, 843), (769, 887), (787, 937), (819, 898)])
 i = 0
 while True:
     i += 1
 
     ret_cup, frame_cup = cup.read()
     if not ret_cup:
-        break
+        breakv
 
     diff = l2_diff(frame_cup, frame_bg)
-    mask = diff > 30
+    # cv2.imshow('frame', diff.astype(np.uint8))
+    mask = diff > 20
 
-    bounding_box_top_left = (245, 306)
-    bounding_box_bottom_right = (298, 320)
+    curr_grace_triangle = np.logical_and(grace_triangle, mask)
+
+    bounding_box_top_left = (615, 805)
+    bounding_box_bottom_right = (820, 873)
     blur_box = cut_moving_part_off_bounding_box(mask, bounding_box_top_left, bounding_box_bottom_right)
+
+    mask = np.logical_or(mask, curr_grace_triangle)
 
     frame = frame_bg2.copy(); frame[mask != 0] = frame_cup[mask != 0]
     blur_moving_part_bounding_box_interface(blur_box, frame)
@@ -147,7 +211,6 @@ while True:
         break
 
 cv2.destroyAllWindows()
-bg.release()
 bg2.release()
 cup.release()
 out.release()
