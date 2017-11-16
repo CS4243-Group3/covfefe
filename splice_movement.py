@@ -254,7 +254,7 @@ while True:
 
     # Apply summoning circle below foreground
     if i > SUMMON_SPRITE_BEGIN_FRAME_INDEX:
-        apply_summon(summon_over_shadow_area, True, frame, summon_frames, i)
+        apply_summon(summon_over_shadow_area, False, frame, summon_frames, i)
 
     # Apply foreground
     frame[mask != 0] = frame_cap[mask != 0]
@@ -262,7 +262,7 @@ while True:
 
     # Apply summoning circle above arm shadow in foreground
     if i > SUMMON_SPRITE_BEGIN_FRAME_INDEX:
-        apply_summon(summon_over_shadow_area, False, frame, summon_frames, i)
+        apply_summon(summon_over_shadow_area, True, frame, summon_frames, i)
 
     cv2.imshow('frame', frame)
     out.write(frame)

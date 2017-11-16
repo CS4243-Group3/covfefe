@@ -60,12 +60,12 @@ cap.set(cv2.CAP_PROP_POS_FRAMES, BEGIN_ZOOMIN_FRAME)
 # First frame to track
 _, old_frame = cap.read()
 old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
-i = 0
 
 # Identify path to tracked feature
 features = np.array([[[SUMMONING_CIRCLE_X, SUMMONING_CIRCLE_Y]]]).astype(np.float32)
 img_center = [vid_width / 2, vid_height / 2]
 
+i = 0
 while True:
     ret, frame = cap.read()
     if not ret or i > ZOOMIN_ZOOMOUT_FRAMEDIFF:
