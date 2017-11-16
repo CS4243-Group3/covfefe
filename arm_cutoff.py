@@ -12,21 +12,7 @@ framerate = cup.get(cv2.CAP_PROP_FPS)
 vid_width = int(cup.get(cv2.CAP_PROP_FRAME_WIDTH))
 vid_height = int(cup.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('plus_ultra_output.mp4', fourcc, framerate, (vid_width, vid_height))
-
-"""
-bg = cv2.VideoCapture('notebook_bg.mp4')
-ret_bg, frame_bg = bg.read()
-
-while True:
-    old_frame = frame_bg
-    ret_bg, frame_bg = bg.read()
-    if not ret_bg:
-        break
-frame_bg = old_frame
-
-bg.release()
-"""
+out = cv2.VideoWriter('plus_ultra_portal_output.mp4', fourcc, framerate, (vid_width, vid_height))
 
 frame_count = cup.get(cv2.CAP_PROP_FRAME_COUNT)
 bg_frame = frame_count - 3 * framerate
@@ -146,9 +132,9 @@ def blur_moving_part_bounding_box_interface(blur_box, frame):
         frame[887:929, 746:825, channel] = blurred_box
 
 
-def create_grace_triangle(triangle_points):
+def create_grace_polygon(triangle_points):
     verts = triangle_points + [(0, 0)]
-    codes = [Path.MOVETO, Path.LINETO, Path.LINETO, Path.CLOSEPOLY]
+    codes = [Path.MOVETO] + (len(triangle_points) - 1) * [Path.LINETO] + [Path.CLOSEPOLY]
     path = Path(verts, codes)
 
     x, y = np.meshgrid(np.arange(vid_width), np.arange(vid_height))
@@ -178,19 +164,71 @@ def create_grace_shape(shape_points):
     return grid
 
 
+def load_summon():
+    summon_frames = []
+
+    for frame_no in range(45):
+        summon = cv2.imread('summon/summon%d.png' % frame_no, cv2.IMREAD_UNCHANGED)
+        summon_height = summon.shape[0]
+        summon_width = summon.shape[1]
+        summon = cv2.resize(summon, (int(summon_width * 1.75), int(summon_height * 1.75)))
+        summon_frames.append(summon)
+
+    return summon_frames
+
+
+def apply_summon(frame, summon_frames, i):
+    summon_frame = summon_frames[(i % 90) // 2]
+    summon_height = summon_frame.shape[0]
+    summon_width = summon_frame.shape[1]
+
+    summon_mask = summon_frame[:, :, 3] > 100
+
+    applied_box = frame[933-summon_height:933, 525:525+summon_width]
+
+    if i < 100:
+        applied_box[summon_mask] = (((100 - i) / 100) * applied_box[summon_mask] + (i / 100) * summon_frame[:, :, :3][summon_mask]).astype(np.uint8)
+    else:
+        applied_box[summon_mask] = summon_frame[:, :, :3][summon_mask]
+
+    frame[933-summon_height:933, 525:525+summon_width] = applied_box
+
+
+def apply_summon_over_shadows(summon_grace_triangle, frame, summon_frames, i):
+    summon_frame = summon_frames[(i % 90) // 2]
+    summon_height = summon_frame.shape[0]
+    summon_width = summon_frame.shape[1]
+
+    summon_mask = summon_frame[:, :, 3] > 100
+
+    applied_box = frame[933-summon_height:933, 525:525+summon_width]
+    grace_box = summon_grace_triangle[933-summon_height:933, 525:525+summon_width]
+    summon_mask = np.logical_and(summon_mask, grace_box)
+
+    if i < 100:
+        applied_box[summon_mask] = (((100 - i) / 100) * applied_box[summon_mask] + (i / 100) * summon_frame[:, :, :3][summon_mask]).astype(np.uint8)
+    else:
+        applied_box[summon_mask] = summon_frame[:, :, :3][summon_mask]
+
+    frame[933 - summon_height:933, 525:525 + summon_width] = applied_box
+
+
+summon_frames = load_summon()
+
+
 # grace_triangle = create_grace_triangle([(820, 843), (727, 922), (820, 937)])
 # grace_triangle = create_grace_triangle([(820, 843), (769, 887), (819, 898)])
 grace_triangle = create_grace_shape([(820, 843), (769, 887), (787, 937), (819, 898)])
+summon_grace_triangle = create_grace_polygon([(925, 800), (849, 819), (769, 887), (849, 944), (925, 955)])
 i = 0
 while True:
     i += 1
 
     ret_cup, frame_cup = cup.read()
     if not ret_cup:
-        breakv
+        break
 
     diff = l2_diff(frame_cup, frame_bg)
-    # cv2.imshow('frame', diff.astype(np.uint8))
     mask = diff > 20
 
     curr_grace_triangle = np.logical_and(grace_triangle, mask)
@@ -201,8 +239,12 @@ while True:
 
     mask = np.logical_or(mask, curr_grace_triangle)
 
-    frame = frame_bg2.copy(); frame[mask != 0] = frame_cup[mask != 0]
+    frame = frame_bg2.copy()
+    apply_summon(frame, summon_frames, i)
+    frame[mask != 0] = frame_cup[mask != 0]
+
     blur_moving_part_bounding_box_interface(blur_box, frame)
+    apply_summon_over_shadows(summon_grace_triangle, frame, summon_frames, i)
 
     cv2.imshow('frame', frame)
     out.write(frame)

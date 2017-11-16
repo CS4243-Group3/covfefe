@@ -8,7 +8,7 @@ NATIVE = False
 DEBUG = False
 
 
-def track_features(old_gray, new_gray, features, num_pyramid=4, num_iterations=1, window_size=13):
+def track_features(old_gray, new_gray, features, num_pyramid=4, num_iterations=1, window_size=13, drop_weak=True):
 
     num_pyramid = max(num_pyramid, 1)
     window_size = window_size // 2 * 2 + 1
@@ -32,7 +32,7 @@ def track_features(old_gray, new_gray, features, num_pyramid=4, num_iterations=1
             new_feature = (feature + displacement).astype(np.float32)
 
             # Drop point if not a corner
-            if not is_corner(new_feature, pyramid[0][2], window_size // 2):
+            if drop_weak and not is_corner(new_feature, pyramid[0][2], window_size // 2):
                 continue
 
             old_features.append(feature)
@@ -133,15 +133,17 @@ def build_pyramid(old_gray, new_gray, num_pyramid):
     pyramid = [(old_gray, new_gray, build_derivatives(old_gray, new_gray))]
     for i in range(1, num_pyramid):
         old, new, _ = pyramid[i-1]
-        old = cv2.resize(src=old, dsize=None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
-        new = cv2.resize(src=new, dsize=None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+        old = cv2.GaussianBlur(old, (3, 3), 1.5)
+        old = cv2.resize(old, (old.shape[1] // 2, old.shape[0] // 2))
+        new = cv2.GaussianBlur(new, (3, 3), 1.5)
+        new = cv2.resize(new, (new.shape[1] // 2, new.shape[0] // 2))
         pyramid.append((old, new, build_derivatives(old, new)))
     return pyramid
 
 
 def build_derivatives(old_gray, new_gray):
 
-    # Calculative partial derivatives wrt x, y & time
+    # Calculate partial derivatives wrt x, y & time
     kernel = np.array([[1, 0, -1]]) / 2.
     I_x = convolve2d(old_gray, kernel, 'same')
     I_y = convolve2d(old_gray, kernel.T, 'same')
