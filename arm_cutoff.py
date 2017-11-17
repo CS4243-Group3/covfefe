@@ -4,6 +4,7 @@ import math
 from scipy.signal import convolve2d
 from scipy.ndimage.filters import gaussian_filter
 from matplotlib.path import Path
+from random import randint
 
 cup = cv2.VideoCapture('plus_ultra.mts')
 bg2 = cv2.VideoCapture('plus_ultra_bg2.mts')
@@ -27,6 +28,36 @@ cup.set(cv2.CAP_PROP_POS_FRAMES, 550)
 
 ret_bg2, frame_bg2 = bg2.read()
 cv2.imwrite('plus_ultra_bg2.png', frame_bg2)
+
+class Particle:
+
+    def __init__(self, position, countdown=60, distance=50, alpha=1.0):
+        self.position = position # position is y, x
+        self.countdown = countdown # in frames
+        self.alpha = alpha
+        self.travel_distance = distance
+        self.speed = distance / countdown
+        self.decay = alpha / countdown
+
+    def next_frame(self):
+        self.position[0] -= self.speed
+        self.countdown -= 1
+        self.decrease_alpha()
+
+    def decrease_alpha(self):
+        self.alpha -= self.decay
+        if(self.alpha < 0):
+            self.alpha = 0
+
+    def renew(self, w, h, ref_coord):
+        rand_x = ref_coord[1] + randint(0, w)
+        rand_y = ref_coord[0] - randint(0, h)
+        self.position = [rand_y, rand_x]
+        self.countdown = randint(60, 180)
+        self.alpha = 1.0
+        self.travel_distance = randint(40, 100)
+        self.speed = self.travel_distance / self.countdown
+        self.decay = self.alpha / self.countdown
 
 
 def l2_diff(fc, bg):
@@ -163,6 +194,98 @@ def create_grace_shape(shape_points):
 
     return grid
 
+'''YAN LING'S WEIRD ASS PARTICLE EFFECT'''
+def init_particle_system(pool_size):
+
+    pool = []
+    w = 330
+    h = 110
+    ref_coord = [903, 550]
+
+    for i in range(pool_size):
+        rand_x = ref_coord[1] + randint(0, w)
+        rand_y = ref_coord[0] - randint(0, h)
+        spawn_point = [rand_y, rand_x]
+        pool.append(Particle(spawn_point))
+
+    return pool
+
+def animate_particles(frame, particle_pool, img):
+
+    w = 330
+    h = 210
+    ref_coord = [903, 550]
+
+    for particle in particle_pool:
+        draw_particle_in_location(frame, particle.position, particle.alpha, img)
+        particle.next_frame()
+        if(particle.countdown < 0):
+            particle.renew(w, h, ref_coord)
+
+def draw_particle_in_location(frame, location, alpha, particle):
+
+    location[0] = (int)(location[0])
+    location[1] = (int)(location[1])
+    affected_area = frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16]
+    white = np.array([255, 255, 255], dtype='uint8')
+    '''temp = np.zeros([8,8,3], dtype='uint8')
+    for x in range(8):
+        for y in range(8):
+            temp[y, x] = white'''
+
+    temp = particle;
+
+    temp[0, 0] = affected_area[11, 11]
+    temp[0, 7] = affected_area[11, 19]
+    temp[7, 0] = affected_area[19, 11]
+    temp[7, 7] = affected_area[19, 19]
+
+    affected_area[11:19,11:19] = affected_area[11:19,11:19] * (1.0 - alpha) + temp * alpha
+
+    # Gaussian blur the affected area
+    affected_area = cv2.GaussianBlur(affected_area, (5,5), 1.0)
+
+    frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16] = affected_area
+
+def animate_small_particles(frame, particle_pool):
+
+    w = 330
+    h = 210
+    ref_coord = [903, 550]
+
+    for particle in particle_pool:
+        draw_small_particle_in_location(frame, particle.position, particle.alpha)
+        particle.next_frame()
+        if(particle.countdown < 0):
+            particle.renew(w, h, ref_coord)
+
+def draw_small_particle_in_location(frame, location, alpha):
+
+    location[0] = (int)(location[0])
+    location[1] = (int)(location[1])
+    affected_area = frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16]
+    white = np.array([255, 255, 255], dtype='uint8')
+    temp = np.zeros([4,4,3], dtype='uint8')
+    for x in range(4):
+        for y in range(4):
+            temp[y, x] = white
+
+    affected_area[13:17,13:17] = affected_area[13:17,13:17] * (1.0 - alpha) + temp * alpha
+
+    # Gaussian blur the affected area
+    affected_area = cv2.GaussianBlur(affected_area, (5,5), 0.5)
+
+    frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16] = affected_area
+
+def draw_trial_bounding_box(frame, summon_frames, i):
+
+    w = 330
+    h = 110
+    white_square = [[np.array([25, 25, 25], dtype='uint8') for x in range(w)] for y in range(h)]
+    bottom_left_coord = [903, 550]
+    ref_coord = bottom_left_coord
+
+    frame[ref_coord[0] - h:ref_coord[0], ref_coord[1]:ref_coord[1] + w] += white_square
 
 def load_summon():
     summon_frames = []
@@ -214,7 +337,11 @@ def apply_summon_over_shadows(summon_grace_triangle, frame, summon_frames, i):
 
 
 summon_frames = load_summon()
-
+particle_pool_back = init_particle_system(7)
+particle_pool_front = init_particle_system(7)
+small_particle_pool_back = init_particle_system(7)
+small_particle_pool_front = init_particle_system(7)
+particle_img = cv2.imread('particle.png', cv2.IMREAD_COLOR)
 
 # grace_triangle = create_grace_triangle([(820, 843), (727, 922), (820, 937)])
 # grace_triangle = create_grace_triangle([(820, 843), (769, 887), (819, 898)])
@@ -241,10 +368,19 @@ while True:
 
     frame = frame_bg2.copy()
     apply_summon(frame, summon_frames, i)
+
+    # Particle system
+    animate_particles(frame, particle_pool_back, particle_img)
+    animate_small_particles(frame, small_particle_pool_back)
+    '''END'''
+
     frame[mask != 0] = frame_cup[mask != 0]
 
     blur_moving_part_bounding_box_interface(blur_box, frame)
     apply_summon_over_shadows(summon_grace_triangle, frame, summon_frames, i)
+
+    animate_particles(frame, particle_pool_front, particle_img)
+    animate_small_particles(frame, small_particle_pool_front)
 
     cv2.imshow('frame', frame)
     out.write(frame)
