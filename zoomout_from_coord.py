@@ -1,22 +1,36 @@
 import numpy as np
 import cv2
+from constants import MAX_ZOOM, ASPECT_RATIO_HEIGHT, ASPECT_RATIO_WIDTH, \
+    SUMMONING_CIRCLE_X_FINAL, SUMMONING_CIRCLE_Y_FINAL, ZOOMOUT_FRAME_COUNT
+
+
+# ----------------
+# Input & output
+# ----------------
 
 cap = cv2.VideoCapture('plus_ultra_portal_output.mp4')
-
 vid_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 vid_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-print(vid_width, vid_height)
 framerate = cap.get(cv2.CAP_PROP_FPS)
-
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 out = cv2.VideoWriter('plus_ultra_portal_output_zoomed.mp4', fourcc, framerate, (vid_width, vid_height))
 
 
+# --------------------
+# Zoom functionality
+# --------------------
+
 def bb(center, i):
-    w = vid_width - (50 - i) * (vid_width - vid_width // 4) / 50
-    unit = w // 16
-    w = unit * 16
-    h = unit * 9
+    """
+    Generates the bounding box for the zoom.
+    """
+    w = vid_width - (ZOOMOUT_FRAME_COUNT - i) * (vid_width - vid_width // MAX_ZOOM) / ZOOMOUT_FRAME_COUNT
+
+    # These steps are to deal with float division
+    unit = w // ASPECT_RATIO_WIDTH
+    w = unit * ASPECT_RATIO_WIDTH
+    h = unit * ASPECT_RATIO_HEIGHT
+
     x_min = max(0, center[0] - w / 2)
     x_max = center[0] + w - (center[0] - x_min)
     y_max = min(vid_height, center[1] + h / 2)
@@ -26,15 +40,23 @@ def bb(center, i):
 
 
 def interpolate_center(feature_coordinates, img_center, i):
-    if i > 50:
+    """
+    This method introduced to smoothly transition before
+    and after zooming.
+    """
+    if i > ZOOMOUT_FRAME_COUNT:
         return img_center
 
     vector_to_feature = feature_coordinates - img_center
-    vector_to_feature_interpolate = vector_to_feature * (50 - i) / 50
+    vector_to_feature_interpolate = vector_to_feature * (ZOOMOUT_FRAME_COUNT - i) / ZOOMOUT_FRAME_COUNT
     return img_center + vector_to_feature_interpolate
 
 
-feature_coordinates = [646.28063965, 822.14111328]
+# ------------------------------------------
+# Zoomout each frame of the original video
+# ------------------------------------------
+
+feature_coordinates = [SUMMONING_CIRCLE_X_FINAL, SUMMONING_CIRCLE_Y_FINAL]
 img_center = np.array([vid_width / 2, vid_height / 2])
 i = 0
 while True:
@@ -42,7 +64,7 @@ while True:
     if not ret:
         break
 
-    if i < 50:
+    if i < ZOOMOUT_FRAME_COUNT:
         zoom_center = interpolate_center(feature_coordinates, img_center, i)
         minX, maxX, minY, maxY = bb(zoom_center, i)
 

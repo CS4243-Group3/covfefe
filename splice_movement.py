@@ -4,6 +4,7 @@ import math
 from scipy.signal import convolve2d
 from scipy.ndimage.filters import gaussian_filter
 from matplotlib.path import Path
+<<<<<<< HEAD:arm_cutoff.py
 from random import randint
 
 cup = cv2.VideoCapture('plus_ultra.mts')
@@ -12,22 +13,40 @@ bg2 = cv2.VideoCapture('plus_ultra_bg2.mts')
 framerate = cup.get(cv2.CAP_PROP_FPS)
 vid_width = int(cup.get(cv2.CAP_PROP_FRAME_WIDTH))
 vid_height = int(cup.get(cv2.CAP_PROP_FRAME_HEIGHT))
+=======
+from constants import ELLIPSE_Y, EFFECTS_VIDEO_LENGTH, EFFECTS_VIDEO_BEGIN_FRAME, FOREGROUND_THRESHOLD, \
+    SUMMON_SPRITE_COUNT, SUMMON_SPRITE_SCALE, SUMMON_SPRITE_ALPHA_THRESHOLD, SUMMON_SPRITE_BEGIN_FRAME_INDEX, \
+    SUMMON_FADEIN_DURATION, FRAMES_PER_SPRITE, SUMMON_OFFSET_FROM_CIRCLE_BOX_X, SUMMON_OFFSET_FROM_CIRCLE_BOX_Y, \
+    CIRCLE_TOP, CIRCLE_BOTTOM, CIRCLE_LEFT, CIRCLE_RIGHT, \
+    SHADOW_BLUR_TOP, SHADOW_BLUR_BOTTOM, SHADOW_BLUR_LEFT, SHADOW_BLUR_RIGHT, \
+    ARM_SHADOW_AREA_POINTS, SUMMON_OVER_SHADOW_AREA_POINTS
+
+# ----------------
+# Input & output
+# ----------------
+
+cap = cv2.VideoCapture('plus_ultra.mts')
+framerate = cap.get(cv2.CAP_PROP_FPS)
+vid_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+vid_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+>>>>>>> a9f0de3b39e593aa859ae5513119f88410a9426e:splice_movement.py
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 out = cv2.VideoWriter('plus_ultra_portal_output.mp4', fourcc, framerate, (vid_width, vid_height))
 
-frame_count = cup.get(cv2.CAP_PROP_FRAME_COUNT)
+# Grab a frame near the end of the video as the background to extract movement from
+frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 bg_frame = frame_count - 3 * framerate
+cap.set(cv2.CAP_PROP_POS_FRAMES, int(bg_frame))
+ret_cap, frame_bg = cap.read()
+cap.release()
 
-cup.set(cv2.CAP_PROP_POS_FRAMES, int(bg_frame))
+# Reload the video to start from the beginning
+cap = cv2.VideoCapture('plus_ultra.mts')
+cap.set(cv2.CAP_PROP_POS_FRAMES, EFFECTS_VIDEO_BEGIN_FRAME)
 
-ret_cup, frame_bg = cup.read()
-cup.release()
-
-cup = cv2.VideoCapture('plus_ultra.mts')
-cup.set(cv2.CAP_PROP_POS_FRAMES, 550)
-
+# Grab a frame from the background video
+bg2 = cv2.VideoCapture('plus_ultra_bg2.mts')
 ret_bg2, frame_bg2 = bg2.read()
-cv2.imwrite('plus_ultra_bg2.png', frame_bg2)
 
 class Particle:
 
@@ -60,10 +79,18 @@ class Particle:
         self.decay = self.alpha / self.countdown
 
 
+# ------------------------
+# Foreground masking-off
+# ------------------------
+
 def l2_diff(fc, bg):
     diff = np.linalg.norm(fc.astype(np.float32) - bg.astype(np.float32), axis=2)
     return diff
 
+
+# ---------------
+# Cutoff of arm
+# ---------------
 
 def get_moving_part_in_bounding_box(moving_part_mask, bounding_box_top_left, bounding_box_bottom_right):
     left = bounding_box_top_left[0]
@@ -86,8 +113,7 @@ def gen_ellipse_curve(ellipse_x, ellipse_y_radius):
 
 
 def cutoff_contour(moving_part_bounding_box, arm_cutoff_left_bounding_box, arm_cutoff_right_bounding_box, bottom, top, center_y):
-    # moving_part_bounding_box[center_y:(bottom - top), :] = False
-    ellipse_curve = gen_ellipse_curve(arm_cutoff_right_bounding_box - arm_cutoff_left_bounding_box, 15)
+    ellipse_curve = gen_ellipse_curve(arm_cutoff_right_bounding_box - arm_cutoff_left_bounding_box, ELLIPSE_Y)
     for x in range(moving_part_bounding_box.shape[1]):
         if x < arm_cutoff_left_bounding_box or x >= arm_cutoff_right_bounding_box:
             moving_part_bounding_box[center_y:(bottom - top), x] = False
@@ -105,7 +131,7 @@ def cut_moving_part_off_bounding_box(moving_part_mask, bounding_box_top_left, bo
     center_y = int((bottom - top) / 2)
 
     # Clean the parts below
-    moving_part_mask[top + center_y + 15:, 0:right] = False
+    moving_part_mask[top + center_y + ELLIPSE_Y:, 0:right] = False
 
     # Moving part in bounding box?
     moving_part_bounding_box = moving_part_mask[top:bottom, left:right]
@@ -128,6 +154,10 @@ def cut_moving_part_off_bounding_box(moving_part_mask, bounding_box_top_left, bo
 
     return blur_box
 
+
+# --------------------------
+# Blurring of cutoff parts
+# --------------------------
 
 def gausswin(winsize, sigma):
     filter = np.zeros(winsize)
@@ -155,14 +185,15 @@ def blur_moving_part_bounding_box_interface(blur_box, frame):
         blurred_box = blurred_box[2:-2, 2:-2]
         frame[top:bottom, left:right, channel] = blurred_box
 
-    shadow_line_blur = frame[887-2:929+2, 746-2:825+2]
+    shadow_line_blur = frame[SHADOW_BLUR_TOP-2:SHADOW_BLUR_BOTTOM+2, SHADOW_BLUR_LEFT-2:SHADOW_BLUR_RIGHT+2]
     kernel = gausswin([5, 5], 1.5)
     for channel in range(3):
         blurred_box = convolve2d(shadow_line_blur[:, :, channel], kernel, 'same').astype(np.uint8)
         blurred_box = blurred_box[2:-2, 2:-2]
-        frame[887:929, 746:825, channel] = blurred_box
+        frame[SHADOW_BLUR_TOP:SHADOW_BLUR_BOTTOM, SHADOW_BLUR_LEFT:SHADOW_BLUR_RIGHT, channel] = blurred_box
 
 
+<<<<<<< HEAD:arm_cutoff.py
 def create_grace_polygon(triangle_points):
     verts = triangle_points + [(0, 0)]
     codes = [Path.MOVETO] + (len(triangle_points) - 1) * [Path.LINETO] + [Path.CLOSEPOLY]
@@ -286,87 +317,117 @@ def draw_trial_bounding_box(frame, summon_frames, i):
     ref_coord = bottom_left_coord
 
     frame[ref_coord[0] - h:ref_coord[0], ref_coord[1]:ref_coord[1] + w] += white_square
+=======
+# ---------------
+# Summon circle
+# ---------------
+>>>>>>> a9f0de3b39e593aa859ae5513119f88410a9426e:splice_movement.py
 
 def load_summon():
     summon_frames = []
 
-    for frame_no in range(45):
+    for frame_no in range(SUMMON_SPRITE_COUNT):
         summon = cv2.imread('summon/summon%d.png' % frame_no, cv2.IMREAD_UNCHANGED)
         summon_height = summon.shape[0]
         summon_width = summon.shape[1]
-        summon = cv2.resize(summon, (int(summon_width * 1.75), int(summon_height * 1.75)))
+        summon = cv2.resize(summon, (int(summon_width * SUMMON_SPRITE_SCALE), int(summon_height * SUMMON_SPRITE_SCALE)))
         summon_frames.append(summon)
 
     return summon_frames
 
 
-def apply_summon(frame, summon_frames, i):
-    summon_frame = summon_frames[(i % 90) // 2]
+summon_bottom = CIRCLE_BOTTOM + SUMMON_OFFSET_FROM_CIRCLE_BOX_Y
+summon_left = CIRCLE_LEFT + SUMMON_OFFSET_FROM_CIRCLE_BOX_X
+
+
+def apply_summon(special_area_mask, apply_special_area, frame, summon_frames, i):
+    i -= SUMMON_SPRITE_BEGIN_FRAME_INDEX
+    summon_frame = summon_frames[(i % (SUMMON_SPRITE_COUNT * FRAMES_PER_SPRITE)) // FRAMES_PER_SPRITE]
     summon_height = summon_frame.shape[0]
     summon_width = summon_frame.shape[1]
 
-    summon_mask = summon_frame[:, :, 3] > 100
+    summon_mask = summon_frame[:, :, 3] > SUMMON_SPRITE_ALPHA_THRESHOLD
 
-    applied_box = frame[933-summon_height:933, 525:525+summon_width]
+    applied_box = frame[summon_bottom-summon_height:summon_bottom, summon_left:summon_left+summon_width]
+    grace_box = special_area_mask[summon_bottom-summon_height:summon_bottom, summon_left:summon_left+summon_width]
 
-    if i < 100:
-        applied_box[summon_mask] = (((100 - i) / 100) * applied_box[summon_mask] + (i / 100) * summon_frame[:, :, :3][summon_mask]).astype(np.uint8)
-    else:
-        applied_box[summon_mask] = summon_frame[:, :, :3][summon_mask]
+    if not apply_special_area:
+        grace_box = np.invert(grace_box)
 
-    frame[933-summon_height:933, 525:525+summon_width] = applied_box
-
-
-def apply_summon_over_shadows(summon_grace_triangle, frame, summon_frames, i):
-    summon_frame = summon_frames[(i % 90) // 2]
-    summon_height = summon_frame.shape[0]
-    summon_width = summon_frame.shape[1]
-
-    summon_mask = summon_frame[:, :, 3] > 100
-
-    applied_box = frame[933-summon_height:933, 525:525+summon_width]
-    grace_box = summon_grace_triangle[933-summon_height:933, 525:525+summon_width]
     summon_mask = np.logical_and(summon_mask, grace_box)
 
-    if i < 100:
-        applied_box[summon_mask] = (((100 - i) / 100) * applied_box[summon_mask] + (i / 100) * summon_frame[:, :, :3][summon_mask]).astype(np.uint8)
+    if i < SUMMON_FADEIN_DURATION:
+        background_alpha_blend = ((SUMMON_FADEIN_DURATION - i) / SUMMON_FADEIN_DURATION) * applied_box[summon_mask]
+        summon_alpha_blend = (i / SUMMON_FADEIN_DURATION) * summon_frame[:, :, :3][summon_mask]
+        applied_box[summon_mask] = (background_alpha_blend + summon_alpha_blend).astype(np.uint8)
     else:
         applied_box[summon_mask] = summon_frame[:, :, :3][summon_mask]
 
-    frame[933 - summon_height:933, 525:525 + summon_width] = applied_box
+    frame[summon_bottom-summon_height:summon_bottom, summon_left:summon_left+summon_width] = applied_box
 
 
+# -------------------------
+# Special treatment areas
+# -------------------------
+
+def create_special_area_mask(shape_points, end_with_curve):
+    verts = shape_points + [(0, 0)]
+    codes = [Path.MOVETO] + (len(shape_points) - 1) * [Path.LINETO] + [Path.CLOSEPOLY]
+    if end_with_curve:
+        codes[-3] = Path.CURVE3
+        codes[-2] = Path.CURVE3
+    path = Path(verts, codes)
+
+    x, y = np.meshgrid(np.arange(vid_width), np.arange(vid_height))
+    x, y = x.flatten(), y.flatten()
+
+    points = np.vstack((x, y)).T
+
+    grid = path.contains_points(points)
+    grid = grid.reshape((vid_height, vid_width))
+
+    return grid
+
+<<<<<<< HEAD:arm_cutoff.py
 summon_frames = load_summon()
 particle_pool_back = init_particle_system(7)
 particle_pool_front = init_particle_system(7)
 small_particle_pool_back = init_particle_system(7)
 small_particle_pool_front = init_particle_system(7)
 particle_img = cv2.imread('particle.png', cv2.IMREAD_COLOR)
+=======
 
-# grace_triangle = create_grace_triangle([(820, 843), (727, 922), (820, 937)])
-# grace_triangle = create_grace_triangle([(820, 843), (769, 887), (819, 898)])
-grace_triangle = create_grace_shape([(820, 843), (769, 887), (787, 937), (819, 898)])
-summon_grace_triangle = create_grace_polygon([(925, 800), (849, 819), (769, 887), (849, 944), (925, 955)])
+# ------------------------------------------
+# Process each frame of original video
+# ------------------------------------------
+>>>>>>> a9f0de3b39e593aa859ae5513119f88410a9426e:splice_movement.py
+
+summon_frames = load_summon()
+arm_shadow_area = create_special_area_mask(ARM_SHADOW_AREA_POINTS, end_with_curve=True)
+summon_over_shadow_area = create_special_area_mask(SUMMON_OVER_SHADOW_AREA_POINTS, end_with_curve=False)
 i = 0
 while True:
     i += 1
 
-    ret_cup, frame_cup = cup.read()
-    if not ret_cup:
+    ret_cap, frame_cap = cap.read()
+    if not ret_cap or i > EFFECTS_VIDEO_LENGTH:
         break
 
-    diff = l2_diff(frame_cup, frame_bg)
-    mask = diff > 20
+    # Extract moving foreground
+    diff = l2_diff(frame_cap, frame_bg)
+    mask = diff > FOREGROUND_THRESHOLD
 
-    curr_grace_triangle = np.logical_and(grace_triangle, mask)
-
-    bounding_box_top_left = (615, 805)
-    bounding_box_bottom_right = (820, 873)
+    # Cut arm portions off moving foreground
+    bounding_box_top_left = (CIRCLE_LEFT, CIRCLE_TOP)
+    bounding_box_bottom_right = (CIRCLE_RIGHT, CIRCLE_BOTTOM)
     blur_box = cut_moving_part_off_bounding_box(mask, bounding_box_top_left, bounding_box_bottom_right)
 
-    mask = np.logical_or(mask, curr_grace_triangle)
+    # Allow shadow from moving foreground to appear
+    curr_arm_shadow_area = np.logical_and(arm_shadow_area, mask)
+    mask = np.logical_or(mask, curr_arm_shadow_area)
 
     frame = frame_bg2.copy()
+<<<<<<< HEAD:arm_cutoff.py
     apply_summon(frame, summon_frames, i)
 
     # Particle system
@@ -375,9 +436,20 @@ while True:
     '''END'''
 
     frame[mask != 0] = frame_cup[mask != 0]
+=======
+>>>>>>> a9f0de3b39e593aa859ae5513119f88410a9426e:splice_movement.py
 
+    # Apply summoning circle below foreground
+    if i > SUMMON_SPRITE_BEGIN_FRAME_INDEX:
+        apply_summon(summon_over_shadow_area, True, frame, summon_frames, i)
+
+    # Apply foreground
+    frame[mask != 0] = frame_cap[mask != 0]
     blur_moving_part_bounding_box_interface(blur_box, frame)
-    apply_summon_over_shadows(summon_grace_triangle, frame, summon_frames, i)
+
+    # Apply summoning circle above arm shadow in foreground
+    if i > SUMMON_SPRITE_BEGIN_FRAME_INDEX:
+        apply_summon(summon_over_shadow_area, False, frame, summon_frames, i)
 
     animate_particles(frame, particle_pool_front, particle_img)
     animate_small_particles(frame, small_particle_pool_front)
@@ -390,5 +462,5 @@ while True:
 
 cv2.destroyAllWindows()
 bg2.release()
-cup.release()
+cap.release()
 out.release()
