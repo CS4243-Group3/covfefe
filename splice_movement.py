@@ -4,16 +4,8 @@ import math
 from scipy.signal import convolve2d
 from scipy.ndimage.filters import gaussian_filter
 from matplotlib.path import Path
-<<<<<<< HEAD:arm_cutoff.py
 from random import randint
 
-cup = cv2.VideoCapture('plus_ultra.mts')
-bg2 = cv2.VideoCapture('plus_ultra_bg2.mts')
-
-framerate = cup.get(cv2.CAP_PROP_FPS)
-vid_width = int(cup.get(cv2.CAP_PROP_FRAME_WIDTH))
-vid_height = int(cup.get(cv2.CAP_PROP_FRAME_HEIGHT))
-=======
 from constants import ELLIPSE_Y, EFFECTS_VIDEO_LENGTH, EFFECTS_VIDEO_BEGIN_FRAME, FOREGROUND_THRESHOLD, \
     SUMMON_SPRITE_COUNT, SUMMON_SPRITE_SCALE, SUMMON_SPRITE_ALPHA_THRESHOLD, SUMMON_SPRITE_BEGIN_FRAME_INDEX, \
     SUMMON_FADEIN_DURATION, FRAMES_PER_SPRITE, SUMMON_OFFSET_FROM_CIRCLE_BOX_X, SUMMON_OFFSET_FROM_CIRCLE_BOX_Y, \
@@ -29,7 +21,6 @@ cap = cv2.VideoCapture('plus_ultra.mts')
 framerate = cap.get(cv2.CAP_PROP_FPS)
 vid_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 vid_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
->>>>>>> a9f0de3b39e593aa859ae5513119f88410a9426e:splice_movement.py
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 out = cv2.VideoWriter('plus_ultra_portal_output.mp4', fourcc, framerate, (vid_width, vid_height))
 
@@ -47,37 +38,6 @@ cap.set(cv2.CAP_PROP_POS_FRAMES, EFFECTS_VIDEO_BEGIN_FRAME)
 # Grab a frame from the background video
 bg2 = cv2.VideoCapture('plus_ultra_bg2.mts')
 ret_bg2, frame_bg2 = bg2.read()
-
-class Particle:
-
-    def __init__(self, position, countdown=60, distance=50, alpha=1.0):
-        self.position = position # position is y, x
-        self.countdown = countdown # in frames
-        self.alpha = alpha
-        self.travel_distance = distance
-        self.speed = distance / countdown
-        self.decay = alpha / countdown
-
-    def next_frame(self):
-        self.position[0] -= self.speed
-        self.countdown -= 1
-        self.decrease_alpha()
-
-    def decrease_alpha(self):
-        self.alpha -= self.decay
-        if(self.alpha < 0):
-            self.alpha = 0
-
-    def renew(self, w, h, ref_coord):
-        rand_x = ref_coord[1] + randint(0, w)
-        rand_y = ref_coord[0] - randint(0, h)
-        self.position = [rand_y, rand_x]
-        self.countdown = randint(60, 180)
-        self.alpha = 1.0
-        self.travel_distance = randint(40, 100)
-        self.speed = self.travel_distance / self.countdown
-        self.decay = self.alpha / self.countdown
-
 
 # ------------------------
 # Foreground masking-off
@@ -193,39 +153,40 @@ def blur_moving_part_bounding_box_interface(blur_box, frame):
         frame[SHADOW_BLUR_TOP:SHADOW_BLUR_BOTTOM, SHADOW_BLUR_LEFT:SHADOW_BLUR_RIGHT, channel] = blurred_box
 
 
-<<<<<<< HEAD:arm_cutoff.py
-def create_grace_polygon(triangle_points):
-    verts = triangle_points + [(0, 0)]
-    codes = [Path.MOVETO] + (len(triangle_points) - 1) * [Path.LINETO] + [Path.CLOSEPOLY]
-    path = Path(verts, codes)
+# ------------------
+# Particle Effects
+# ------------------
 
-    x, y = np.meshgrid(np.arange(vid_width), np.arange(vid_height))
-    x, y = x.flatten(), y.flatten()
+class Particle:
 
-    points = np.vstack((x,y)).T
+    def __init__(self, position, countdown=60, distance=50, alpha=1.0):
+        self.position = position # position is y, x
+        self.countdown = countdown # in frames
+        self.alpha = alpha
+        self.travel_distance = distance
+        self.speed = distance / countdown
+        self.decay = alpha / countdown
 
-    grid = path.contains_points(points)
-    grid = grid.reshape((vid_height, vid_width))
+    def next_frame(self):
+        self.position[0] -= self.speed
+        self.countdown -= 1
+        self.decrease_alpha()
 
-    return grid
+    def decrease_alpha(self):
+        self.alpha -= self.decay
+        if(self.alpha < 0):
+            self.alpha = 0
 
+    def renew(self, w, h, ref_coord):
+        rand_x = ref_coord[1] + randint(0, w)
+        rand_y = ref_coord[0] - randint(0, h)
+        self.position = [rand_y, rand_x]
+        self.countdown = randint(60, 180)
+        self.alpha = 1.0
+        self.travel_distance = randint(40, 100)
+        self.speed = self.travel_distance / self.countdown
+        self.decay = self.alpha / self.countdown
 
-def create_grace_shape(shape_points):
-    verts = shape_points + [(0, 0)]
-    codes = [Path.MOVETO, Path.LINETO, Path.CURVE3, Path.CURVE3, Path.CLOSEPOLY]
-    path = Path(verts, codes)
-
-    x, y = np.meshgrid(np.arange(vid_width), np.arange(vid_height))
-    x, y = x.flatten(), y.flatten()
-
-    points = np.vstack((x, y)).T
-
-    grid = path.contains_points(points)
-    grid = grid.reshape((vid_height, vid_width))
-
-    return grid
-
-'''YAN LING'S WEIRD ASS PARTICLE EFFECT'''
 def init_particle_system(pool_size):
 
     pool = []
@@ -308,20 +269,9 @@ def draw_small_particle_in_location(frame, location, alpha):
 
     frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16] = affected_area
 
-def draw_trial_bounding_box(frame, summon_frames, i):
-
-    w = 330
-    h = 110
-    white_square = [[np.array([25, 25, 25], dtype='uint8') for x in range(w)] for y in range(h)]
-    bottom_left_coord = [903, 550]
-    ref_coord = bottom_left_coord
-
-    frame[ref_coord[0] - h:ref_coord[0], ref_coord[1]:ref_coord[1] + w] += white_square
-=======
 # ---------------
 # Summon circle
 # ---------------
->>>>>>> a9f0de3b39e593aa859ae5513119f88410a9426e:splice_movement.py
 
 def load_summon():
     summon_frames = []
@@ -338,7 +288,6 @@ def load_summon():
 
 summon_bottom = CIRCLE_BOTTOM + SUMMON_OFFSET_FROM_CIRCLE_BOX_Y
 summon_left = CIRCLE_LEFT + SUMMON_OFFSET_FROM_CIRCLE_BOX_X
-
 
 def apply_summon(special_area_mask, apply_special_area, frame, summon_frames, i):
     i -= SUMMON_SPRITE_BEGIN_FRAME_INDEX
@@ -388,21 +337,17 @@ def create_special_area_mask(shape_points, end_with_curve):
 
     return grid
 
-<<<<<<< HEAD:arm_cutoff.py
+
+# ------------------------------------------
+# Process each frame of original video
+# ------------------------------------------
+
 summon_frames = load_summon()
 particle_pool_back = init_particle_system(7)
 particle_pool_front = init_particle_system(7)
 small_particle_pool_back = init_particle_system(7)
 small_particle_pool_front = init_particle_system(7)
 particle_img = cv2.imread('particle.png', cv2.IMREAD_COLOR)
-=======
-
-# ------------------------------------------
-# Process each frame of original video
-# ------------------------------------------
->>>>>>> a9f0de3b39e593aa859ae5513119f88410a9426e:splice_movement.py
-
-summon_frames = load_summon()
 arm_shadow_area = create_special_area_mask(ARM_SHADOW_AREA_POINTS, end_with_curve=True)
 summon_over_shadow_area = create_special_area_mask(SUMMON_OVER_SHADOW_AREA_POINTS, end_with_curve=False)
 i = 0
@@ -427,21 +372,14 @@ while True:
     mask = np.logical_or(mask, curr_arm_shadow_area)
 
     frame = frame_bg2.copy()
-<<<<<<< HEAD:arm_cutoff.py
-    apply_summon(frame, summon_frames, i)
-
-    # Particle system
-    animate_particles(frame, particle_pool_back, particle_img)
-    animate_small_particles(frame, small_particle_pool_back)
-    '''END'''
-
-    frame[mask != 0] = frame_cup[mask != 0]
-=======
->>>>>>> a9f0de3b39e593aa859ae5513119f88410a9426e:splice_movement.py
 
     # Apply summoning circle below foreground
     if i > SUMMON_SPRITE_BEGIN_FRAME_INDEX:
         apply_summon(summon_over_shadow_area, True, frame, summon_frames, i)
+
+    # Particle system in background
+    animate_particles(frame, particle_pool_back, particle_img)
+    animate_small_particles(frame, small_particle_pool_back)
 
     # Apply foreground
     frame[mask != 0] = frame_cap[mask != 0]
@@ -451,6 +389,7 @@ while True:
     if i > SUMMON_SPRITE_BEGIN_FRAME_INDEX:
         apply_summon(summon_over_shadow_area, False, frame, summon_frames, i)
 
+    # Particle system in foreground
     animate_particles(frame, particle_pool_front, particle_img)
     animate_small_particles(frame, small_particle_pool_front)
 
