@@ -6,7 +6,7 @@ Install the requirements with `pip3 install -r requirements.txt`.
 
 ### Part 1
 
-Run the Lucas-Kanade tracking demo with `python3 demo.py path_to_video_file`.
+Run the Lucas-Kanade tracking demo with `python3 demo.py path_to_video_file optional_path_to_output_file`.
 
 ### Part 2
 

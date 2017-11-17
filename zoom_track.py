@@ -26,9 +26,12 @@ def bb(center, i):
     Generates the bounding box for the zoom.
     """
     w = vid_width - min(i, ZOOMIN_FRAME_COUNT) * (vid_width - vid_width // MAX_ZOOM) / ZOOMIN_FRAME_COUNT
+
+    # These steps are to deal with float division
     unit = w // ASPECT_RATIO_WIDTH
     w = unit * ASPECT_RATIO_WIDTH
     h = unit * ASPECT_RATIO_HEIGHT
+
     x_min = max(0, center[0] - w / 2)
     x_max = center[0] + w - (center[0] - x_min)
     y_min = max(0, center[1] - h / 2)

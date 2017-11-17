@@ -4,6 +4,8 @@ import math
 from scipy.signal import convolve2d
 from scipy.ndimage.filters import gaussian_filter
 from matplotlib.path import Path
+from random import randint
+
 from constants import ELLIPSE_Y, EFFECTS_VIDEO_LENGTH, EFFECTS_VIDEO_BEGIN_FRAME, FOREGROUND_THRESHOLD, \
     SUMMON_SPRITE_COUNT, SUMMON_SPRITE_SCALE, SUMMON_SPRITE_ALPHA_THRESHOLD, SUMMON_SPRITE_BEGIN_FRAME_INDEX, \
     SUMMON_FADEIN_DURATION, FRAMES_PER_SPRITE, SUMMON_OFFSET_FROM_CIRCLE_BOX_X, SUMMON_OFFSET_FROM_CIRCLE_BOX_Y, \
@@ -36,7 +38,6 @@ cap.set(cv2.CAP_PROP_POS_FRAMES, EFFECTS_VIDEO_BEGIN_FRAME)
 # Grab a frame from the background video
 bg2 = cv2.VideoCapture('plus_ultra_bg2.mts')
 ret_bg2, frame_bg2 = bg2.read()
-
 
 # ------------------------
 # Foreground masking-off
@@ -152,6 +153,122 @@ def blur_moving_part_bounding_box_interface(blur_box, frame):
         frame[SHADOW_BLUR_TOP:SHADOW_BLUR_BOTTOM, SHADOW_BLUR_LEFT:SHADOW_BLUR_RIGHT, channel] = blurred_box
 
 
+# ------------------
+# Particle Effects
+# ------------------
+
+class Particle:
+
+    def __init__(self, position, countdown=60, distance=50, alpha=1.0):
+        self.position = position # position is y, x
+        self.countdown = countdown # in frames
+        self.alpha = alpha
+        self.travel_distance = distance
+        self.speed = distance / countdown
+        self.decay = alpha / countdown
+
+    def next_frame(self):
+        self.position[0] -= self.speed
+        self.countdown -= 1
+        self.decrease_alpha()
+
+    def decrease_alpha(self):
+        self.alpha -= self.decay
+        if(self.alpha < 0):
+            self.alpha = 0
+
+    def renew(self, w, h, ref_coord):
+        rand_x = ref_coord[1] + randint(0, w)
+        rand_y = ref_coord[0] - randint(0, h)
+        self.position = [rand_y, rand_x]
+        self.countdown = randint(60, 180)
+        self.alpha = 1.0
+        self.travel_distance = randint(40, 100)
+        self.speed = self.travel_distance / self.countdown
+        self.decay = self.alpha / self.countdown
+
+def init_particle_system(pool_size):
+
+    pool = []
+    w = 330
+    h = 110
+    ref_coord = [903, 550]
+
+    for i in range(pool_size):
+        rand_x = ref_coord[1] + randint(0, w)
+        rand_y = ref_coord[0] - randint(0, h)
+        spawn_point = [rand_y, rand_x]
+        pool.append(Particle(spawn_point))
+
+    return pool
+
+def animate_particles(frame, particle_pool, img):
+
+    w = 330
+    h = 210
+    ref_coord = [903, 550]
+
+    for particle in particle_pool:
+        draw_particle_in_location(frame, particle.position, particle.alpha, img)
+        particle.next_frame()
+        if(particle.countdown < 0):
+            particle.renew(w, h, ref_coord)
+
+def draw_particle_in_location(frame, location, alpha, particle):
+
+    location[0] = (int)(location[0])
+    location[1] = (int)(location[1])
+    affected_area = frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16]
+    white = np.array([255, 255, 255], dtype='uint8')
+    '''temp = np.zeros([8,8,3], dtype='uint8')
+    for x in range(8):
+        for y in range(8):
+            temp[y, x] = white'''
+
+    temp = particle;
+
+    temp[0, 0] = affected_area[11, 11]
+    temp[0, 7] = affected_area[11, 19]
+    temp[7, 0] = affected_area[19, 11]
+    temp[7, 7] = affected_area[19, 19]
+
+    affected_area[11:19,11:19] = affected_area[11:19,11:19] * (1.0 - alpha) + temp * alpha
+
+    # Gaussian blur the affected area
+    affected_area = cv2.GaussianBlur(affected_area, (5,5), 1.0)
+
+    frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16] = affected_area
+
+def animate_small_particles(frame, particle_pool):
+
+    w = 330
+    h = 210
+    ref_coord = [903, 550]
+
+    for particle in particle_pool:
+        draw_small_particle_in_location(frame, particle.position, particle.alpha)
+        particle.next_frame()
+        if(particle.countdown < 0):
+            particle.renew(w, h, ref_coord)
+
+def draw_small_particle_in_location(frame, location, alpha):
+
+    location[0] = (int)(location[0])
+    location[1] = (int)(location[1])
+    affected_area = frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16]
+    white = np.array([255, 255, 255], dtype='uint8')
+    temp = np.zeros([4,4,3], dtype='uint8')
+    for x in range(4):
+        for y in range(4):
+            temp[y, x] = white
+
+    affected_area[13:17,13:17] = affected_area[13:17,13:17] * (1.0 - alpha) + temp * alpha
+
+    # Gaussian blur the affected area
+    affected_area = cv2.GaussianBlur(affected_area, (5,5), 0.5)
+
+    frame[location[0]-16:location[0]+16, location[1]-16:location[1]+16] = affected_area
+
 # ---------------
 # Summon circle
 # ---------------
@@ -171,7 +288,6 @@ def load_summon():
 
 summon_bottom = CIRCLE_BOTTOM + SUMMON_OFFSET_FROM_CIRCLE_BOX_Y
 summon_left = CIRCLE_LEFT + SUMMON_OFFSET_FROM_CIRCLE_BOX_X
-
 
 def apply_summon(special_area_mask, apply_special_area, frame, summon_frames, i):
     i -= SUMMON_SPRITE_BEGIN_FRAME_INDEX
@@ -227,6 +343,11 @@ def create_special_area_mask(shape_points, end_with_curve):
 # ------------------------------------------
 
 summon_frames = load_summon()
+particle_pool_back = init_particle_system(7)
+particle_pool_front = init_particle_system(7)
+small_particle_pool_back = init_particle_system(7)
+small_particle_pool_front = init_particle_system(7)
+particle_img = cv2.imread('particle.png', cv2.IMREAD_COLOR)
 arm_shadow_area = create_special_area_mask(ARM_SHADOW_AREA_POINTS, end_with_curve=True)
 summon_over_shadow_area = create_special_area_mask(SUMMON_OVER_SHADOW_AREA_POINTS, end_with_curve=False)
 i = 0
@@ -256,6 +377,10 @@ while True:
     if i > SUMMON_SPRITE_BEGIN_FRAME_INDEX:
         apply_summon(summon_over_shadow_area, False, frame, summon_frames, i)
 
+    # Particle system in background
+    animate_particles(frame, particle_pool_back, particle_img)
+    animate_small_particles(frame, small_particle_pool_back)
+
     # Apply foreground
     frame[mask != 0] = frame_cap[mask != 0]
     blur_moving_part_bounding_box_interface(blur_box, frame)
@@ -263,6 +388,10 @@ while True:
     # Apply summoning circle above arm shadow in foreground
     if i > SUMMON_SPRITE_BEGIN_FRAME_INDEX:
         apply_summon(summon_over_shadow_area, True, frame, summon_frames, i)
+
+    # Particle system in foreground
+    animate_particles(frame, particle_pool_front, particle_img)
+    animate_small_particles(frame, small_particle_pool_front)
 
     cv2.imshow('frame', frame)
     out.write(frame)
